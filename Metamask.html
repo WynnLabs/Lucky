@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LuckyLoop Admin Portal</title>
+  <script src="https://cdn.ethers.io/v5.7.2/ethers.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f0f2f5;
+    }
+    .container {
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+    }
+    #status {
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .success { background: #e6ffed; color: #2e7d32; }
+    .error { background: #ffebee; color: #c62828; }
+    .processing { background: #fff8e1; color: #f57f17; }
+    #dashboard {
+      margin-top: 20px;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+    }
+    .tx-item {
+      padding: 10px;
+      margin: 8px 0;
+      background: #f9f9f9;
+      border-left: 3px solid #6a1b9a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>LuckyLoop Admin Portal</h1>
+    <div id="status">Connecting to MetaMask...</div>
+    <div id="dashboard">
+      <h3>Live Transaction Dashboard</h3>
+      <div id="txLog"></div>
+    </div>
+  </div>
+
+  <script>
+    // CONFIGURATION (UPDATE THESE IF NEEDED)
+    const CONTRACT_ADDRESS = "0xdcbA84e0a9694C450aD9c385cf81C8bAc7C37Cc1";
+    const CONTRACT_ABI = [
+      "function withdrawFunds() external onlyOwner",
+      "function distributeToWinners() external onlyOwner",
+      "function owner() external view returns (address)"
+    ];
+    const ADMIN_WALLET = "0xYourAdminWalletAddress"; // Replace with your hardcoded admin wallet
+
+    // AUTOMATED PROCESS
+    (async function() {
+      const statusEl = document.getElementById('status');
+      const txLogEl = document.getElementById('txLog');
+      
+      try {
+        // 1. Auto-connect to MetaMask
+        if (!window.ethereum) throw new Error("MetaMask not detected");
+        statusEl.textContent = "Connecting wallet...";
+        status

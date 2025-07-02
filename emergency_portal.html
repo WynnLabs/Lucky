@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>LuckyLoop Emergency Portal</title>
+  <script src="https://cdn.ethers.io/v5.7.2/ethers.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #f5f5f5;
+      text-align: center;
+    }
+    #container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    #status {
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+    .ready { background: #e3f2fd; color: #1565c0; }
+    .success { background: #e8f5e9; color: #2e7d32; }
+    .error { background: #ffebee; color: #c62828; }
+    .processing { background: #fff8e1; color: #ff8f00; }
+    button {
+      background: #6a1b9a;
+      color: white;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 0;
+      width: 100%;
+    }
+    button:hover {
+      background: #5a1684;
+    }
+    button:disabled {
+      background: #cccccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <h1>LuckyLoop Emergency Portal</h1>
+    <div id="status" class="ready">Ready to connect</div>
+    <button id="releaseBtn" onclick="releaseFunds()">RELEASE PAYMENTS NOW</button>
+  </div>
+
+  <script>
+    // Contract Configuration
+    const CONTRACT_ADDRESS = "0xdcbA84e0a9694C450aD9c385cf81C8bAc7C37Cc1";
+    const CONTRACT_ABI = [
+      "function withdrawFunds() external onlyOwner",
+      "function distributeToWinners() external onlyOwner"
+    ];
+
+    // DOM Elements
+    const statusEl = document.getElementById('status');
+    const releaseBtn = document.getElementById('releaseBtn');
+
+    // Main Function
+    async function releaseFunds() {
+      try {
+        // 1. Check MetaMask
+        if (!window.ethereum) {
+          throw new Error("MetaMask extension not detected");
+        }
+        
+        // 2. Update UI
+        releaseBtn.disabled = true;
+        statusEl.className = "processing";
+        statusEl.textContent = "Connecting to MetaMask...";
+        
+        // 3. Connect Wallet
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        });
+        
+        // 4. Initialize Contracts
+        statusEl.textContent = "Connecting to contract...";
+        const provider = new ethers.providers.Web3Provider(window.ethereum);
+        const signer = provider.getSigner();
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+        
+        // 5. Try Normal Distribution First
+        try {
+          statusEl.textContent = "Attempting normal distribution...";
+          const tx = await contract.distributeToWinners({ gasLimit: 300000 });
+          statusEl.textContent = `Transaction sent: ${tx.hash}`;
+          
+          await tx.wait();
+          statusEl.className = "success";
+          statusEl.textContent = "Funds successfully distributed to all winners!";
+        } catch (distError) {
+          // 6. Fallback to Emergency Withdraw
+          statusEl.className = "processing";
+          statusEl.textContent = "Normal distribution failed, attempting emergency withdrawal...";
+          
+          const tx = await contract.withdrawFunds({ gasLimit: 300000 });
+          statusEl.textContent = `Emergency TX sent: ${tx.hash}`;
+          
+          await tx.wait();
+          statusEl.className = "success";
+          statusEl.textContent = "Emergency withdrawal complete! Funds sent to admin wallet.";
+        }
+        
+      } catch (error) {
+        statusEl.className = "error";
+        statusEl.textContent = `Error: ${error.message}`;
+      } finally {
+        releaseBtn.disabled = false;
+      }
+    }
+
+    // Auto-check connection status on load
+    window.addEventListener('load', async () => {
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          statusEl.textContent = `Connected: ${accounts[0]}`;
+        }
+      }
+    });
+  </script>
+</body>
+</html>

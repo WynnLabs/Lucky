@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base Chain Address Validator</title>
+  <script src="https://cdn.ethers.io/v5.7.2/ethers.umd.min.js"></script>
+  <style>
+    :root {
+      --primary: #6a1b9a;
+      --secondary: #00c4cc;
+      --dark: #1e2a44;
+      --light: #f9f7ff;
+      --success: #4CAF50;
+      --error: #ff6b6b;
+      --warning: #FFA500;
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      max-width: 650px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: var(--light);
+      color: #333;
+      line-height: 1.6;
+    }
+    .container {
+      border: 1px solid var(--dark);
+      padding: 25px;
+      border-radius: 12px;
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    h2 {
+      color: var(--primary);
+      margin-top: 0;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      margin: 10px 0;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: border 0.3s;
+    }
+    input:focus {
+      outline: none;
+      border-color: var(--secondary);
+    }
+    button {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      transition: all 0.3s;
+      margin: 10px 0;
+    }
+    button:hover {
+      background-color: #5a1684;
+      transform: translateY(-2px);
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    #result {
+      margin: 20px 0;
+      padding: 20px;
+      border-radius: 10px;
+      display: none;
+    }
+    .valid {
+      background-color: rgba(76, 175, 80, 0.1);
+      border-left: 4px solid var(--success);
+    }
+    .invalid {
+      background-color: rgba(255, 107, 107, 0.1);
+      border-left: 4px solid var(--error);
+    }
+    .loading {
+      text-align: center;
+      color: var(--secondary);
+      font-style: italic;
+    }
+    .balance {
+      font-weight: bold;
+      font-size: 1.1em;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      font-weight: bold;
+      margin-left: 8px;
+    }
+    .contract-badge {
+      background: var(--secondary);
+      color: white;
+    }
+    .eoa-badge {
+      background: var(--primary);
+      color: white;
+    }
+    .tx-item {
+      padding: 12px;
+      margin: 8px 0;
+      background: rgba(30, 42, 68, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid var(--primary);
+    }
+    .tx-address {
+      font-family: monospace;
+      word-break: break-all;
+    }
+    .tx-balance {
+      color: var(--dark);
+      margin-top: 5px;
+    }
+    .clear-btn {
+      background: var(--error);
+      margin-top: 20px;
+    }
+    #advancedOptions {
+      margin: 20px 0;
+      padding: 15px;
+      background: rgba(0, 196, 204, 0.05);
+      border-radius: 8px;
+      border-left: 3px solid var(--secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🔍 Base Chain Address Validator</h2>
+    <p>Verify any Ethereum address on Base Mainnet with full checksum validation and balance checks</p>
+    
+    <input 
+      type="text" 
+      id="addressInput" 
+      placeholder="Enter 0x address..." 
+      aria-label="Ethereum address input"
+    >
+    <button onclick="verifyAddress()" id="verifyBtn">Verify Address</button>
+    
+    <div id="advancedOptions">
+      <h3>⚙️ Advanced Options</h3>
+      <label>
+        <input type="checkbox" id="checkContract" checked> Detect contract addresses
+      </label>
+      <label>
+        <input type="checkbox" id="checkBalances" checked> Check token balances
+      </label>
+    </div>
+    
+    <div id="result"></div>
+    
+    <h3>📜 Verification History</h3>
+    <div id="txHistory"></div>
+    <button class="clear-btn" onclick="clearHistory()">Clear History</button>
+  </div>
+
+  <script>
+    // ===== CONFIGURATION =====
+    const CONFIG = {
+      chainId: 8453,
+      chainName: "Base Mainnet",
+      rpcUrl: "https://mainnet.base.org",
+      tokens: {
+        USDC: {
+          address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          decimals: 6,
+          abi: ["function balanceOf(address) view returns (uint)"]
+        },
+        WETH: {
+          address: "0x4200000000000000000000000000000000000006", 
+          decimals: 18,
+          abi: ["function balanceOf(address) view returns (uint)"]
+        }
+      }
+    };
+
+    // ===== STATE MANAGEMENT =====
+    let provider;
+    let tokenContracts = {};
+    const txHistory = loadHistory();
+
+    // ===== INITIALIZATION =====
+    window.onload = function() {
+      initializeProvider();
+      updateHistoryDisplay();
+      setupEventListeners();
+    };
+
+    function initializeProvider() {
+      provider = new ethers.providers.JsonRpcProvider(CONFIG.rpcUrl, {
+        chainId: CONFIG.chainId,
+        name: CONFIG.chainName
+      });
+      
+      // Initialize token contracts with specific addresses
+      tokenContracts.USDC = new ethers.Contract(
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+        CONFIG.tokens.USDC.abi,
+        provider
+      );
+      tokenContracts.WETH = new ethers.Contract(
+        "0x4200000000000000000000000000000000000006",
+        CONFIG.tokens.WETH.abi,
+        provider
+      );
+    }
+
+    function setupEventListeners() {
+      document.getElementById('addressInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') verifyAddress();
+      });
+    }
+
+    // ===== CORE VALIDATION FUNCTION =====
+    async function verifyAddress() {
+      const input = document.getElementById('addressInput').value.trim();
+      const resultDiv = document.getElementById('result');
+      const verifyBtn = document.getElementById('verifyBtn');
+      
+      // Validate input
+      if (!input) {
+        showResult("Please enter an address", false);
+        return;
+      }
+
+      // UI updates
+      verifyBtn.disabled = true;
+      verifyBtn.textContent = "Verifying...";
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = '<div class="loading">Analyzing address...</div>';
+      resultDiv.className = '';
+
+      try {
+        // 1. Basic format validation
+        if (!/^0x[a-fA-F0-9]{40}$/.test(input)) {
+          throw new Error("Invalid address format - must be 42 characters starting with 0x");
+        }
+
+        // 2. Checksum validation
+        const checksummed = ethers.utils.getAddress(input);
+        const isContract = document.getElementById('checkContract').checked 
+          ? await isContractAddress(checksummed) 
+          : false;
+        const checkBalances = document.getElementById('checkBalances').checked;
+
+        // 3. Get balances if enabled
+        const balances = checkBalances ? await getAllBalances(checksummed) : null;
+
+        // 4. Display results
+        showAddressDetails(checksummed, input, isContract, balances);
+
+        // 5. Save to history
+        addToHistory({
+          address: checksummed,
+          original: input,
+          timestamp: new Date().toISOString(),
+          isContract,
+          balances
+        });
+
+      } catch (error) {
+        showResult(error.message, false);
+      } finally {
+        verifyBtn.disabled = false;
+        verifyBtn.textContent = "Verify Address";
+      }
+    }
+
+    // ===== HELPER FUNCTIONS =====
+    async function isContractAddress(address) {
+      const code = await provider.getCode(address);
+      return code !== '0x';
+    }
+
+    async function getAllBalances(address) {
+      try {
+        const [ethBalance, usdcBalance, wethBalance] = await Promise.all([
+          provider.getBalance(address),
+          tokenContracts.USDC.balanceOf(address),
+          tokenContracts.WETH.balanceOf(address)
+        ]);
+        
+        return {
+          ETH: ethers.utils.formatUnits(ethBalance, 18),
+          USDC: ethers.utils.formatUnits(usdcBalance, 6),
+          WETH: ethers.utils.formatUnits(wethBalance, 18)
+        };
+      } catch (error) {
+        console.error("Balance check failed:", error);
+        return null;
+      }
+    }
+
+    function showAddressDetails(checksummed, original, isContract, balances) {
+      const resultDiv = document.getElementById('result');
+      
+      let html = `
+        <p><strong>✅ Valid ${CONFIG.chainName} Address</strong></p>
+        <p>Original: <code>${original}</code></p>
+        <p>Checksum: <code>${checksummed}</code></p>
+        <p>Type: <span class="badge ${isContract ? 'contract-badge' : 'eoa-badge'}">
+          ${isContract ? 'Smart Contract' : 'Externally Owned Account'}
+        </span></p>
+      `;
+      
+      if (balances) {
+        html += `<p><strong>Balances:</strong></p><ul>`;
+        html += `<li>ETH: <span class="balance">${balances.ETH}</span></li>`;
+        html += `<li>USDC: <span class="balance">${balances.USDC}</span></li>`;
+        html += `<li>WETH: <span class="balance">${balances.WETH}</span></li>`;
+        html += `</ul>`;
+      }
+      
+      resultDiv.innerHTML = html;
+      resultDiv.className = 'valid';
+    }
+
+    function showResult(message, isValid) {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = `
+        <p><strong>${isValid ? '✅ Valid' : '❌ Invalid'}</strong></p>
+        <p>${message}</p>
+      `;
+      resultDiv.className = isValid ? 'valid' : 'invalid';
+      resultDiv.style.display = 'block';
+    }
+
+    // ===== HISTORY MANAGEMENT =====
+    function addToHistory(entry) {
+      txHistory.unshift(entry);
+      if (txHistory.length > 10) txHistory.pop();
+      saveHistory();
+      updateHistoryDisplay();
+    }
+
+    function updateHistoryDisplay() {
+      const historyDiv = document.getElementById('txHistory');
+      
+      if (txHistory.length === 0) {
+        historyDiv.innerHTML = '<p>No verification history yet</p>';
+        return;
+      }
+      
+      historyDiv.innerHTML = txHistory.map(entry => `
+        <div class="tx-item">
+          <div><strong>${new Date(entry.timestamp).toLocaleString()}</strong></div>
+          <div class="tx-address">${entry.address}</div>
+          <div class="tx-balance">
+            ${entry.balances ? `ETH: ${entry.balances.ETH} | USDC: ${entry.balances.USDC} | WETH: ${entry.balances.WETH}` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function clearHistory() {
+      txHistory.length = 0;
+      saveHistory();
+      updateHistoryDisplay();
+    }
+
+    function saveHistory() {
+      localStorage.setItem('addressValidatorHistory', JSON.stringify(txHistory));
+    }
+
+    function loadHistory() {
+      const saved = localStorage.getItem('addressValidatorHistory');
+      return saved ? JSON.parse(saved) : [];
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuckyLoop Lottery System</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            color: #333;
+            text-align: center;
+        }
+        h1 {
+            color: #ffcc00;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to LuckyLoop Lottery</h1>
+    <button id="connectWallet">Connect Wallet</button>
+    <div id="status"></div>
+    <div id="entries"></div>
+    <button id="enterLottery">Enter Lottery</button>
+    <button id="drawWinner">Draw Winner</button>
+
+    <script>
+        let web3;
+        let accounts;
+        const entryPoolWallet = "YOUR_ENTRY_POOL_WALLET_ADDRESS";
+        const profitWallet = "YOUR_PROFIT_WALLET_ADDRESS";
+        const lotteryContractAddress = "YOUR_LOTTERY_CONTRACT_ADDRESS";
+        const lotteryABI = []; // Add your contract ABI here
+
+        async function initWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.request({ method: 'eth_requestAccounts' });
+                accounts = await web3.eth.getAccounts();
+                document.getElementById('status').innerText = "Wallet Connected: " + accounts[0];
+            } else {
+                document.getElementById('status').innerText = "Please install MetaMask!";
+            }
+        }
+
+        async function enterLottery() {
+            const lotteryContract = new web3.eth.Contract(lotteryABI, lotteryContractAddress);
+            const entryFee = web3.utils.toWei('0.01', 'ether'); // Set your entry fee
+            await lotteryContract.methods.enter().send({ from: accounts[0], value: entryFee });
+            document.getElementById('entries').innerText += "Entry submitted by: " + accounts[0] + "\n";
+        }
+
+        async function drawWinner() {
+            const lotteryContract = new web3.eth.Contract(lotteryABI, lotteryContractAddress);
+            const winner = await lotteryContract.methods.drawWinner().call();
+            alert("The winner is: " + winner);
+        }
+
+        document.getElementById('connectWallet').onclick = initWeb3;
+        document.getElementById('enterLottery').onclick = enterLottery;
+        document.getElementById('drawWinner').onclick = drawWinner;
+    </script>
+</body>
+</html>

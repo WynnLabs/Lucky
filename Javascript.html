@@ -1,0 +1,50 @@
+// Import the Web3.js library
+import Web3 from "web3";
+
+// Set up the Web3 provider
+const provider = new Web3.providers.HttpProvider("https://mainnet.base.org");
+
+// Create a new Web3 instance
+const web3 = new Web3(provider);
+
+// Load the smart contract ABI
+const contractAbi = [...]; // Load the ABI from the compiled contract
+
+// Set up the contract instance
+const contractAddress = "0x..."; // Replace with the deployed contract address
+const contract = new web3.eth.Contract(contractAbi, contractAddress);
+
+// Function to connect the user's wallet
+async function connectWallet() {
+    // Request the user's wallet connection
+    const accounts = await web3.eth.requestAccounts();
+
+    // Get the user's wallet address
+    const walletAddress = accounts[0];
+
+    // Update the UI to reflect the connected wallet
+    document.getElementById("wallet-address").innerText = walletAddress;
+}
+
+// Function to enter the lottery
+async function enterLottery() {
+    // Get the user's wallet address
+    const walletAddress = document.getElementById("wallet-address").innerText;
+
+    // Check if the user has enough Ether to enter the lottery
+    const balance = await web3.eth.getBalance(walletAddress);
+    const entryFee = await contract.methods.entryFee().call();
+
+    if (balance >= entryFee) {
+        // Enter the lottery
+        await contract.methods.enterLottery().send({ from: walletAddress, value: entryFee });
+
+        // Update the UI to reflect the lottery entry
+        document.getElementById("lottery-entry-status").innerText = "Entered";
+    } else {
+        // Update the UI to reflect the insufficient balance
+        document.getElementById("lottery-entry-status").innerText = "Insufficient balance";
+    }
+}
+
+// ...
